@@ -9,94 +9,109 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #007bff; color: white; }
         th a {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    text-decoration: none;
-    color: white;
-    padding: 10px;
-    width: 100%;
-}
-
-th:hover {
-    background-color: #0056b3; /* Darker blue on hover */
-    cursor: pointer;
-}
-
-.sort-icon {
-    font-size: 0.8em;
-    margin-left: 5px;
-    opacity: 0.7;
-}
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-decoration: none;
+            color: white;
+            padding: 10px;
+            width: 100%;
+        }
+        th:hover {
+            background-color: #0056b3;
+            cursor: pointer;
+        }
+        .sort-icon {
+            font-size: 0.8em;
+            margin-left: 5px;
+            opacity: 0.7;
+        }
         .add-btn { display: inline-block; margin-bottom: 20px; padding: 10px 15px;
                    background: #28a745; color: white; text-decoration: none; border-radius: 5px; }
+        .flash-messages { margin-bottom: 20px; }
+        .flash-success { padding: 10px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 5px; }
+        .flash-danger { padding: 10px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 5px; }
     </style>
 </head>
 <body>
 
     <h1>📚 My Library Collection</h1>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, message in messages %}
+            <div class="flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <a href="/add_book" class="add-btn">+ Add New Book</a>
 
-    <form action="/search" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
-    <input type="text" name="search" placeholder="Search by title or author..."
-           value="{{ search_term }}"
-           style="padding: 10px; width: 300px; border-radius: 5px; border: 1px solid #ccc;">
+    <form action="/" method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <input type="text" name="search" placeholder="Search by title or author..."
+               value="{{ search_term }}"
+               style="padding: 10px; width: 300px; border-radius: 5px; border: 1px solid #ccc;">
 
-    <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        Search
-    </button>
+        <!-- Preserve sort state in search form -->
+        <input type="hidden" name="sort" value="{{ current_sort }}">
+        <input type="hidden" name="direction" value="{{ current_dir }}">
 
-    {% if search_term %}
-        <a href="/" style="padding: 10px; color: #666; text-decoration: none;">Clear</a>
-    {% endif %}
-</form>
+        <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Search
+        </button>
+
+        {% if search_term %}
+            <a href="/" style="padding: 10px; color: #666; text-decoration: none;">Clear</a>
+        {% endif %}
+    </form>
+
     <table>
         <thead>
             <tr>
-<th>
-    <a href="/?sort=book_title&direction={{ 'desc' if current_sort == 'book_title' and current_dir == 'asc' else 'asc' }}">
-        Title
-        <span class="sort-icon">
-            {{ '▲' if current_sort == 'book_title' and current_dir == 'asc' else '▼' if current_sort == 'book_title' else '↕' }}
-        </span>
-    </a>
-</th>
                 <th>
-    <a href="/?sort=author&direction={{ 'desc' if current_sort == 'author' and current_dir == 'asc' else 'asc' }}">
-        Author
-        <span class="sort-icon">
-            {{ '▲' if current_sort == 'author' and current_dir == 'asc' else '▼' if current_sort == 'author' else '↕' }}
-        </span>
-    </a>
-</th>
+                    <a href="{{ url_for('home', sort='book_title', direction='desc' if current_sort == 'book_title' and current_dir == 'asc' else 'asc', search=search_term) }}">
+                        Title
+                        <span class="sort-icon">
+                            {{ '▲' if current_sort == 'book_title' and current_dir == 'asc' else '▼' if current_sort == 'book_title' else '↕' }}
+                        </span>
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('home', sort='author', direction='desc' if current_sort == 'author' and current_dir == 'asc' else 'asc', search=search_term) }}">
+                        Author
+                        <span class="sort-icon">
+                            {{ '▲' if current_sort == 'author' and current_dir == 'asc' else '▼' if current_sort == 'author' else '↕' }}
+                        </span>
+                    </a>
+                </th>
                 <th>Year</th>
                 <th>ISBN</th>
-
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for book in books %}
             <tr>
                 <td><strong>{{ book.book_title }}</strong></td>
-                <td>{{ book.author.author_name }}</td>
+                <td>
+                    <a href="{{ url_for('author_profile', author_id=book.author_id) }}">
+                        {{ book.author.author_name }}
+                    </a>
+                </td>
                 <td>{{ book.publication_year }}</td>
                 <td><code>{{ book.isbn }}</code></td>
                 <td>
-    <a href="{{ url_for('author_profile', author_id=book.author_id) }}">
-        {{ book.author.author_name }}
-    </a>
-</td>
-                <td>
-                <form action="{{ url_for('delete_book', book_id=book.book_id) }}"
-                      method="POST"
-                      style="display:inline;"
-                      onsubmit="return confirm('Are you sure you want to delete this book?');">
-                    <button type="submit" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-                        Delete
-                    </button>
-                </form>
-            </td>
+                    <form action="{{ url_for('delete_book', book_id=book.book_id) }}"
+                          method="POST"
+                          style="display:inline;"
+                          onsubmit="return confirm('Are you sure you want to delete this book?');">
+                        <button type="submit" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                            Delete
+                        </button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
