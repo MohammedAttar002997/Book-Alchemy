@@ -1,7 +1,5 @@
-from flask import Flask, render_template, request, flash, redirect, url_for
-from sqlalchemy import create_engine, asc, desc, or_
-from sqlalchemy.orm import sessionmaker, joinedload
 from data_models import db, Author, Book
+from flask import Flask, render_template, request, flash, redirect, url_for
 from flask_cors import CORS
 import os
 
@@ -17,30 +15,20 @@ db.init_app(app)
 with app.app_context():
   db.create_all()
 
-# Create a database connection
-engine = create_engine('sqlite:///data/library.sqlite')
-
-# Create a database session
-Session = sessionmaker(bind=engine)
 
 @app.route('/add_author', methods=['GET','POST'])
 def add_author():
 
     if request.method == 'POST':
-
-        session = Session()
-
-        # Create an instance of the Restaurant table class
         author = Author(
             author_name = request.form['name'],
             birth_date= request.form['birthdate'],
             date_of_death= request.form['date_of_death'],
         )
-
-        # Since the session is already open, add the new restaurant record
-        session.add(author)
-        session.commit()
-        return f"Author {author} added successfully", 200
+        db.session.add(author)
+        db.session.commit()
+        flash(f"Author {author.author_name} added successfully", "success")
+        return redirect(url_for('home')), 200
     return render_template("add_author.html")
 
 
@@ -48,47 +36,39 @@ def add_author():
 def add_book():
 
     if request.method == 'POST':
-        # Create a database connection
-        engine = create_engine('sqlite:///data/library.sqlite')
-
-        # Create a database session
-        Session = sessionmaker(bind=engine)
-        session = Session()
-        # Create an instance of the Restaurant table class
         book = Book(
             book_title = request.form['title'],
             publication_year= request.form['publication_year'],
             author_id= request.form['author_id'],
             isbn= request.form['isbn'],
         )
-
-        # Since the session is already open, add the new restaurant record
-        session.add(book)
-        session.commit()
-        books = session.query(Book).all()
-        return render_template("home.html",books=books)
-    # GET logic: Fetch all authors to populate the dropdown
-    engine = create_engine('sqlite:///data/library.sqlite')
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    authors = session.query(Author).all()
-    session.close()
+        db.session.add(book)
+        db.session.commit()
+        flash(f"Book '{book.book_title}' added successfully!", "success")
+        return redirect(url_for('home'))
+    authors = db.session.query(Author).all()
     return render_template("add_book.html", authors=authors)
-
 
 
 @app.route('/')
 def home():
-    session = Session()
-
-    # Get 'sort' and 'direction' from the URL (defaults to title/asc)
+    search_query = request.args.get('search', '')
     sort_by = request.args.get('sort', 'book_title')
     direction = request.args.get('direction', 'asc')
 
     try:
         # Start the query
-        query = session.query(Book).join(Author).options(joinedload(Book.author))
+        query = Book.query.join(Author).options(db.joinedload(Book.author))
 
+        # Apply search filter if present
+        if search_query:
+            search_filter = f"%{search_query}%"
+            query = query.filter(
+                db.or_(
+                    Book.book_title.ilike(search_filter),
+                    Author.author_name.ilike(search_filter)
+                )
+            )
         # Determine the sorting column
         if sort_by == 'author':
             sort_column = Author.author_name
@@ -97,65 +77,40 @@ def home():
 
         # Apply sorting
         if direction == 'desc':
-            query = query.order_by(desc(sort_column))
+            query = query.order_by(db.desc(sort_column))
         else:
-            query = query.order_by(asc(sort_column))
+            query = query.order_by(db.asc(sort_column))
 
         books = query.all()
-    finally:
-        session.close()
-
-    return render_template("home.html", books=books, current_sort=sort_by, current_dir=direction)
-
-@app.route('/search')
-def search():
-    session = Session()
-
-    # 1. Get the search term from the URL (e.g., /?search=Python)
-    search_query = request.args.get('search', '')
-
-    # 2. Build the base query with Joinedload (to avoid the DetachedInstanceError)
-    query = session.query(Book).join(Author).options(joinedload(Book.author))
-
-    # 3. If there is a search term, apply the filter
-    if search_query:
-        # ilike makes it case-insensitive (Search 'python' finds 'Python')
-        # The % symbols are wildcards (search anywhere in the string)
-        search_filter = f"%{search_query}%"
-        query = query.filter(
-            or_(
-                Book.book_title.ilike(search_filter),
-                Author.author_name.ilike(search_filter)
-            )
-        )
-
-    # 4. Execute and close
-    books = query.all()
-    session.close()
-    return render_template("home.html", books=books, search_term=search_query)
+    except Exception as e:
+        return e
+    return render_template("home.html",
+                           books=books,
+                           search_term=search_query,
+                           current_sort=sort_by,
+                           current_dir=direction)
 
 
 @app.route('/delete_book/<int:book_id>', methods=['POST'])
 def delete_book(book_id):
-    session = Session()
     try:
-        book = session.query(Book).get(book_id)
+        book = db.session.query(Book).get(book_id)
         if book:
             author_id = book.author_id  # Save the ID before the book is gone
             book_title = book.book_title
 
             # 1. Delete the book
-            session.delete(book)
-            session.commit()  # Commit so the database updates the count
+            db.session.delete(book)
+            db.session.commit()  # Commit so the database updates the count
 
             # 2. Check if the author has any OTHER books left
-            remaining_books_count = session.query(Book).filter(Book.author_id == author_id).count()
+            remaining_books_count = db.session.query(Book).filter(Book.author_id == author_id).count()
 
             if remaining_books_count == 0:
-                author_to_delete = session.query(Author).get(author_id)
+                author_to_delete = Author.query.get(author_id)
                 if author_to_delete:
-                    session.delete(author_to_delete)
-                    session.commit()
+                    db.session.delete(author_to_delete)
+                    db.session.commit()
                     flash(
                         f"Book '{book_title}' and author '{author_to_delete.author_name}' (who had no other books) were removed.",
                         "success")
@@ -163,11 +118,25 @@ def delete_book(book_id):
                 flash(f"Book '{book_title}' deleted.", "success")
 
     except Exception as e:
-        session.rollback()
+        db.session.rollback()
         flash(f"Error: {str(e)}", "danger")
-    finally:
-        session.close()
     return redirect(url_for('home'))
+
+
+@app.route('/author/<int:author_id>')
+def author_profile(author_id):
+    try:
+        # 1. Fetch the author.
+        # joinedload('books') grabs all their books in one go!
+        author = Author.query.options(db.joinedload(Author.books)).get(author_id)
+
+        if not author:
+            flash("Author not found.", "danger")
+            return redirect(url_for('home'))
+
+        return render_template("author.html", author=author)
+    except Exception as e:
+        return e
 
 
 if __name__ == '__main__':

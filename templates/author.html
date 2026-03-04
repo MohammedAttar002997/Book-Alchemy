@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ author.author_name }} - Profile</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; line-height: 1.6; }
+        .profile-card { background: #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .book-list { list-style: none; padding: 0; }
+        .book-item { background: white; border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 4px; }
+        .back-link { display: inline-block; margin-top: 20px; color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+    <div class="profile-card">
+        <h1>{{ author.author_name }}</h1>
+        <p><strong>Born:</strong> {{ author.birth_date or 'Unknown' }}</p>
+        <p><strong>Died:</strong> {{ author.date_of_death or 'Present' }}</p>
+    </div>
+
+    <h3>Books in Library:</h3>
+    <ul class="book-list">
+        {% for book in author.books %}
+            <li class="book-item">
+                <strong>{{ book.book_title }}</strong> ({{ book.publication_year }}) <br>
+                <small>ISBN: {{ book.isbn }}</small>
+            </li>
+        {% else %}
+            <li>No books found for this author.</li>
+        {% endfor %}
+    </ul>
+
+    <a href="/" class="back-link">← Back to Homepage</a>
+
+</body>
+</html>
